@@ -66,8 +66,8 @@ Issue detection
 🎬 Quick Start
 1. Install
 bash# Clone the repository
-git clone https://github.com/yourusername/codementor-ai
-cd codementor-ai
+git clone https://github.com/NehaBhask/storyweaver
+cd storyweaver
 
 # Install dependencies
 npm install
