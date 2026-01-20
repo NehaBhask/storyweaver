@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Analysis</title>
+    <link rel="stylesheet" href="analysis.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🤖 Code Analysis</h1>
+            <div class="score-badge">
+                Score: <span class="score-value" id="scoreValue">0</span>/10
+            </div>
+        </header>
+        
+        <section class="summary">
+            <h2>📋 Summary</h2>
+            <p id="summaryText">Loading analysis...</p>
+        </section>
+        
+        <div class="content-grid">
+            <section class="suggestions">
+                <h2>💡 Suggestions (<span id="suggestionCount">0</span>)</h2>
+                <div id="suggestionsList" class="suggestions-list">
+                    <!-- Suggestions will be inserted here -->
+                </div>
+            </section>
+            
+            <section class="issues">
+                <h2>⚠️ Issues (<span id="issueCount">0</span>)</h2>
+                <div id="issuesList" class="issues-list">
+                    <!-- Issues will be inserted here -->
+                </div>
+            </section>
+        </div>
+        
+        <section class="actions">
+            <h2>🔧 Quick Actions</h2>
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="applyBestPractices">
+                    Apply Best Practices
+                </button>
+                <button class="btn btn-secondary" id="showDetailedReport">
+                    Detailed Report
+                </button>
+                <button class="btn btn-outline" id="copyReport">
+                    Copy to Clipboard
+                </button>
+            </div>
+        </section>
+        
+        <section class="raw-data" id="rawDataSection" style="display: none;">
+            <h2>📊 Raw Analysis Data</h2>
+            <pre><code id="rawData"></code></pre>
+        </section>
+    </div>
+    
+    <script src="analysis.js"></script>
+</body>
+</html>
