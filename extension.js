@@ -1,9 +1,12 @@
 const path = require('path');
 const vscode = require('vscode');
 const GeminiClient = require('./src/geminiClient');
+const RepositoryAnalyzer = require('./src/repositoryAnalyzer');
 
 function activate(context) {
     console.log('🎯 StoryWeaver with Gemini 3 - ACTIVATED');
+    let repositoryAnalyzer;
+    let lastRepoAnalysis = null;
     
     // Create status bar
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -20,7 +23,7 @@ function activate(context) {
             { enableScripts: true }
         );
         
-        panel.webview.html = getDemoWebview();
+        panel.webview.html = getDemoWebviewContent();
         
         panel.webview.onDidReceiveMessage(message => {
             if (message.command === 'tryAnalysis') {
@@ -125,13 +128,159 @@ function activate(context) {
         statusBarItem.text = '$(error) Failed';
     }
 });
+const initRepoAnalyzer = async () => {
+    const apiKey = process.env.GEMINI_API_KEY || await vscode.window.showInputBox({
+        prompt: 'Enter your Gemini API Key',
+        password: true,
+        placeHolder: 'AIza...',
+        ignoreFocusOut: true
+    });
+    
+    if (apiKey) {
+        const geminiClient = new GeminiClient(apiKey);
+        repositoryAnalyzer = new RepositoryAnalyzer(geminiClient);
+    }
+};
+const analyzeRepoCommand = vscode.commands.registerCommand('storyweaver.analyzeRepository', async () => {
+    try {
+        if (!repositoryAnalyzer) {
+            await initRepoAnalyzer();
+        }
+        
+        if (!repositoryAnalyzer) {
+            vscode.window.showErrorMessage('Failed to initialize repository analyzer');
+            return;
+        }
+        
+        statusBarItem.text = '$(sync~spin) Analyzing repository...';
+        
+        const result = await repositoryAnalyzer.analyzeFullRepository();
+        lastRepoAnalysis = result;
+        
+        // Create a comprehensive webview panel
+        const panel = vscode.window.createWebviewPanel(
+            'repositoryAnalysis',
+            'Repository Analysis',
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+        );
+        
+        panel.webview.html = getRepositoryAnalysisWebview(result);
+        
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'askQuestion') {
+                const answer = await repositoryAnalyzer.askQuestionAboutCodebase(
+                    message.question,
+                    lastRepoAnalysis ? lastRepoAnalysis.context : null
+                );
+                panel.webview.postMessage({ 
+                    command: 'answerQuestion', 
+                    answer: answer 
+                });
+            } else if (message.command === 'findRelated') {
+                const results = await repositoryAnalyzer.findRelatedFiles(message.term);
+                panel.webview.postMessage({ 
+                    command: 'showRelated', 
+                    results: results 
+                });
+            }
+        });
+        
+        statusBarItem.text = '$(check) Analysis Complete';
+        vscode.window.showInformationMessage(
+            `Repository analyzed: ${result.stats.totalFiles} files, ${result.stats.totalLines} lines`
+        );
+        
+        setTimeout(() => {
+            statusBarItem.text = '$(wand) StoryWeaver';
+        }, 3000);
+        
+    } catch (error) {
+        vscode.window.showErrorMessage(`Repository analysis failed: ${error.message}`);
+        statusBarItem.text = '$(error) Error';
+    }
+});
+const askRepoQuestionCommand = vscode.commands.registerCommand('storyweaver.askAboutRepo', async () => {
+    try {
+        const question = await vscode.window.showInputBox({
+            prompt: 'Ask a question about your codebase',
+            placeHolder: 'e.g., How does authentication work? Where is the API configured?',
+            ignoreFocusOut: true
+        });
+        
+        if (!question) return;
+        
+        if (!repositoryAnalyzer) {
+            await initRepoAnalyzer();
+        }
+        
+        statusBarItem.text = '$(sync~spin) Searching codebase...';
+        
+        const answer = await repositoryAnalyzer.askQuestionAboutCodebase(
+            question,
+            lastRepoAnalysis ? lastRepoAnalysis.context : null
+        );
+        
+        // Show answer in a webview
+        const panel = vscode.window.createWebviewPanel(
+            'repoAnswer',
+            'Codebase Q&A',
+            vscode.ViewColumn.Beside,
+            { enableScripts: true }
+        );
+        
+        panel.webview.html = getQuestionAnswerWebview(question, answer);
+        
+        statusBarItem.text = '$(check) Answer ready';
+        setTimeout(() => {
+            statusBarItem.text = '$(wand) StoryWeaver';
+        }, 3000);
+        
+    } catch (error) {
+        vscode.window.showErrorMessage(`Question failed: ${error.message}`);
+        statusBarItem.text = '$(error) Error';
+    }
+});
+const findRelatedCommand = vscode.commands.registerCommand('storyweaver.findRelated', async () => {
+    try {
+        const searchTerm = await vscode.window.showInputBox({
+            prompt: 'What are you looking for?',
+            placeHolder: 'e.g., authentication, payment processing, user model',
+            ignoreFocusOut: true
+        });
+        
+        if (!searchTerm) return;
+        
+        if (!repositoryAnalyzer) {
+            await initRepoAnalyzer();
+        }
+        
+        statusBarItem.text = '$(search) Finding related files...';
+        
+        const results = await repositoryAnalyzer.findRelatedFiles(searchTerm);
+        
+        vscode.window.showInformationMessage(results, { modal: false });
+        
+        statusBarItem.text = '$(check) Search complete';
+        setTimeout(() => {
+            statusBarItem.text = '$(wand) StoryWeaver';
+        }, 3000);
+        
+    } catch (error) {
+        vscode.window.showErrorMessage(`Search failed: ${error.message}`);
+    }
+});
     
     // Add all commands to subscriptions
     context.subscriptions.push(
         statusBarItem,
         showDemoCommand,
         analyzeCommand,
-        explainCommand
+        explainCommand,
+        analyzeRepoCommand,
+        askRepoQuestionCommand,
+        findRelatedCommand
     );
     
     // Show welcome message
@@ -449,7 +598,261 @@ function formatExplanation(text) {
         .replace(/\n\n/g, '</p><p>')
         .replace(/\n/g, '<br>');
 }
+function getRepositoryAnalysisWebview(result) {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Repository Analysis</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                padding: 20px;
+                background: var(--vscode-editor-background);
+                color: var(--vscode-editor-foreground);
+                line-height: 1.6;
+            }
+            
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                border-radius: 12px;
+                margin-bottom: 30px;
+            }
+            
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            
+            .stat-card {
+                background: var(--vscode-sideBar-background);
+                padding: 20px;
+                border-radius: 8px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+            
+            .stat-number {
+                font-size: 2em;
+                font-weight: bold;
+                color: #667eea;
+            }
+            
+            .stat-label {
+                color: var(--vscode-descriptionForeground);
+                font-size: 0.9em;
+            }
+            
+            .analysis-section {
+                background: var(--vscode-sideBar-background);
+                padding: 25px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                border-left: 4px solid #667eea;
+            }
+            
+            .file-list {
+                max-height: 300px;
+                overflow-y: auto;
+                margin-top: 15px;
+            }
+            
+            .file-item {
+                padding: 8px;
+                margin: 5px 0;
+                background: rgba(255,255,255,0.05);
+                border-radius: 4px;
+                font-family: 'Consolas', monospace;
+                font-size: 0.9em;
+            }
+            
+            .qa-section {
+                background: var(--vscode-sideBar-background);
+                padding: 25px;
+                border-radius: 8px;
+                margin-top: 30px;
+            }
+            
+            .question-input {
+                width: 100%;
+                padding: 12px;
+                border: 1px solid var(--vscode-input-border);
+                background: var(--vscode-input-background);
+                color: var(--vscode-input-foreground);
+                border-radius: 6px;
+                font-size: 1em;
+                margin-bottom: 10px;
+            }
+            
+            .btn {
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: opacity 0.2s;
+            }
+            
+            .btn:hover {
+                opacity: 0.9;
+            }
+            
+            .answer-box {
+                background: rgba(102, 126, 234, 0.1);
+                padding: 20px;
+                border-radius: 8px;
+                margin-top: 15px;
+                border-left: 4px solid #667eea;
+                white-space: pre-wrap;
+            }
+            
+            .language-badge {
+                display: inline-block;
+                background: #4CAF50;
+                color: white;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 0.8em;
+                margin: 2px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🔍 Repository Analysis</h1>
+            <p>Comprehensive codebase understanding powered by Gemini</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">${result.stats.totalFiles}</div>
+                <div class="stat-label">Files Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${result.stats.totalLines.toLocaleString()}</div>
+                <div class="stat-label">Lines of Code</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${result.stats.languages.length}</div>
+                <div class="stat-label">Languages</div>
+            </div>
+        </div>
+        
+        <div class="analysis-section">
+            <h2>📊 Languages Used</h2>
+            ${result.stats.languages.map(lang => 
+                `<span class="language-badge">${lang}</span>`
+            ).join('')}
+        </div>
+        
+        <div class="analysis-section">
+            <h2>📋 Gemini Analysis</h2>
+            <div style="white-space: pre-wrap;">${result.analysis.fullText}</div>
+        </div>
+        
+        <div class="analysis-section">
+            <h2>📁 Files in Repository</h2>
+            <div class="file-list">
+                ${result.files.slice(0, 50).map(file => 
+                    `<div class="file-item">
+                        ${file.path} 
+                        <span style="color: #888;">(${file.lines} lines, ${file.language})</span>
+                    </div>`
+                ).join('')}
+                ${result.files.length > 50 ? 
+                    `<div style="padding: 10px; text-align: center; color: #888;">
+                        ... and ${result.files.length - 50} more files
+                    </div>` : ''}
+            </div>
+        </div>
+        
+        <div class="qa-section">
+            <h2>💬 Ask Questions About Your Codebase</h2>
+            <input type="text" 
+                   id="questionInput" 
+                   class="question-input" 
+                   placeholder="e.g., How does authentication work in this project?"
+                   onkeypress="if(event.key==='Enter') askQuestion()">
+            <button class="btn" onclick="askQuestion()">Ask Gemini</button>
+            <div id="answerBox"></div>
+        </div>
+        
+        <script>
+            const vscode = acquireVsCodeApi();
+            
+            function askQuestion() {
+                const input = document.getElementById('questionInput');
+                const question = input.value.trim();
+                
+                if (!question) return;
+                
+                vscode.postMessage({
+                    command: 'askQuestion',
+                    question: question
+                });
+                
+                document.getElementById('answerBox').innerHTML = 
+                    '<div class="answer-box">⏳ Asking Gemini...</div>';
+            }
+            
+            window.addEventListener('message', event => {
+                const message = event.data;
+                
+                if (message.command === 'answerQuestion') {
+                    document.getElementById('answerBox').innerHTML = 
+                        '<div class="answer-box">' + message.answer + '</div>';
+                }
+            });
+        </script>
+    </body>
+    </html>`;
+}
 
+function getQuestionAnswerWebview(question, answer) {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {
+                padding: 20px;
+                font-family: var(--vscode-font-family);
+                background: var(--vscode-editor-background);
+                color: var(--vscode-editor-foreground);
+            }
+            .question {
+                background: rgba(102, 126, 234, 0.2);
+                padding: 20px;
+                border-radius: 8px;
+                border-left: 4px solid #667eea;
+                margin-bottom: 20px;
+            }
+            .answer {
+                background: var(--vscode-sideBar-background);
+                padding: 20px;
+                border-radius: 8px;
+                white-space: pre-wrap;
+                line-height: 1.6;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="question">
+            <strong>Question:</strong> ${question}
+        </div>
+        <div class="answer">
+            ${answer}
+        </div>
+    </body>
+    </html>`;
+}
 module.exports = {
     activate,
     deactivate

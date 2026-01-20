@@ -1,24 +1,25 @@
 {
   "name": "storyweaver",
-  "displayName": "StoryWeaver - AI Code Assistant",
-  "description": "Smart coding assistant powered by Gemini 3. Free tier included!",
+  "displayName": "StoryWeaver - Your Whole Stack, One Conversation",
+  "description": "AI-powered pair programming with Gemini. Analyze entire repositories instantly.",
   "version": "1.0.0",
-  "publisher": "StoryWeaverAI",
+  "publisher": "StoryWeaver",
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
     "Programming Languages",
-    "AI"
+    "Machine Learning",
+    "Other"
   ],
   "keywords": [
     "ai",
     "gemini",
     "code analysis",
-    "autocomplete",
-    "debug"
+    "repository analysis",
+    "pair programming",
+    "codebase understanding"
   ],
-  "icon": "media/icon.png",
   "main": "./extension.js",
   "activationEvents": [
     "onStartupFinished"
@@ -27,27 +28,27 @@
     "commands": [
       {
         "command": "storyweaver.showDemo",
-        "title": "Show StoryWeaver Demo"
+        "title": "StoryWeaver: Show Demo"
       },
       {
         "command": "storyweaver.analyzeCode",
-        "title": "Analyze Code with AI"
+        "title": "StoryWeaver: Analyze Current File"
       },
       {
         "command": "storyweaver.explainCode",
-        "title": "Explain Selected Code"
+        "title": "StoryWeaver: Explain Selected Code"
       },
       {
-        "command": "storyweaver.upgrade",
-        "title": "Get Real Gemini 3"
+        "command": "storyweaver.analyzeRepository",
+        "title": "StoryWeaver: Analyze Entire Repository"
       },
       {
-        "command": "storyweaver.status",
-        "title": "Check Service Status"
+        "command": "storyweaver.askAboutRepo",
+        "title": "StoryWeaver: Ask Question About Codebase"
       },
       {
-        "command": "storyweaver.welcome",
-        "title": "Show Welcome Guide"
+        "command": "storyweaver.findRelated",
+        "title": "StoryWeaver: Find Related Files"
       }
     ],
     "menus": {
@@ -55,35 +56,37 @@
         {
           "command": "storyweaver.explainCode",
           "when": "editorHasSelection",
-          "group": "AI Assistant"
+          "group": "StoryWeaver"
         },
         {
           "command": "storyweaver.analyzeCode",
           "when": "editorTextFocus",
-          "group": "AI Assistant"
+          "group": "StoryWeaver"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "storyweaver.analyzeRepository",
+          "group": "StoryWeaver"
         }
       ],
       "commandPalette": [
         {
-          "command": "storyweaver.showDemo",
-          "when": "always"
+          "command": "storyweaver.analyzeRepository",
+          "when": "workspaceFolderCount > 0"
         },
         {
-          "command": "storyweaver.analyzeCode",
-          "when": "editorTextFocus"
+          "command": "storyweaver.askAboutRepo",
+          "when": "workspaceFolderCount > 0"
         },
         {
-          "command": "storyweaver.explainCode",
-          "when": "editorHasSelection"
-        },
-        {
-          "command": "storyweaver.upgrade",
-          "when": "always"
+          "command": "storyweaver.findRelated",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     }
   },
   "dependencies": {
-    "axios": "^1.6.0"
+    "@google/genai": "^1.37.0"
   }
 }
