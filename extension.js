@@ -2,11 +2,13 @@ const path = require('path');
 const vscode = require('vscode');
 const GeminiClient = require('./src/geminiClient');
 const RepositoryAnalyzer = require('./src/repositoryAnalyzer');
+const SuggestionProvider = require('./src/suggestionProvider');
 
 function activate(context) {
     console.log('🎯 StoryWeaver with Gemini 3 - ACTIVATED');
     let repositoryAnalyzer;
     let lastRepoAnalysis = null;
+    let suggestionProvider;
     
     // Create status bar
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -141,6 +143,27 @@ const initRepoAnalyzer = async () => {
         repositoryAnalyzer = new RepositoryAnalyzer(geminiClient);
     }
 };
+const initSuggestionProvider = async () => {
+        const apiKey = process.env.GEMINI_API_KEY || await vscode.window.showInputBox({
+            prompt: 'Enter your Gemini API Key',
+            password: true,
+            placeHolder: 'AIza...',
+            ignoreFocusOut: true
+        });
+        
+        if (apiKey) {
+            const geminiClient = new GeminiClient(apiKey);
+            const configManager = { 
+                get: (key) => {
+                    if (key === 'autoSuggest') return true;
+                    if (key === 'temperature') return 0.7;
+                    return null;
+                }
+            };
+            suggestionProvider = new SuggestionProvider(geminiClient, configManager);
+            vscode.window.showInformationMessage('AI suggestions enabled');
+        }
+    };
 const analyzeRepoCommand = vscode.commands.registerCommand('storyweaver.analyzeRepository', async () => {
     try {
         if (!repositoryAnalyzer) {
@@ -271,6 +294,19 @@ const findRelatedCommand = vscode.commands.registerCommand('storyweaver.findRela
         vscode.window.showErrorMessage(`Search failed: ${error.message}`);
     }
 });
+// Command to toggle suggestions
+    const toggleSuggestionsCommand = vscode.commands.registerCommand(
+        'storyweaver.toggleSuggestions', 
+        async () => {
+            if (!suggestionProvider) {
+                await initSuggestionProvider();
+            } else {
+                suggestionProvider.dispose();
+                suggestionProvider = null;
+                vscode.window.showInformationMessage('AI suggestions disabled');
+            }
+        }
+    );
     
     // Add all commands to subscriptions
     context.subscriptions.push(
@@ -280,7 +316,8 @@ const findRelatedCommand = vscode.commands.registerCommand('storyweaver.findRela
         explainCommand,
         analyzeRepoCommand,
         askRepoQuestionCommand,
-        findRelatedCommand
+        findRelatedCommand,
+        toggleSuggestionsCommand
     );
     
     // Show welcome message

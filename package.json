@@ -49,6 +49,10 @@
       {
         "command": "storyweaver.findRelated",
         "title": "StoryWeaver: Find Related Files"
+      },
+      {
+        "command": "storyweaver.toggleSuggestions",
+        "title": "StoryWeaver: Toggle AI Autocomplete"
       }
     ],
     "menus": {
@@ -61,6 +65,11 @@
         {
           "command": "storyweaver.analyzeCode",
           "when": "editorTextFocus",
+          "group": "StoryWeaver"
+        },
+        {
+          "command": "storyweaver.toggleSuggestions",
+          "when": "editorHasSelection",
           "group": "StoryWeaver"
         }
       ],
